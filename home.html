@@ -6,8 +6,37 @@
 window.onload = function () {
     var conn;
     var msg = document.getElementById("msg");
-    var game = document.getElementById("game");
+    var gameStatus = document.getElementById("gameStatus");
+    var canvas = document.getElementById("gameCanvas");
+    var ctx = canvas.getContext("2d");
+    let PLAYER_CIRCLE_RADIUS = 10
 
+    function drawPlayerCircle(x, y, color) {
+        ctx.beginPath();
+        ctx.arc(
+            x - PLAYER_CIRCLE_RADIUS,
+            y,
+            PLAYER_CIRCLE_RADIUS,
+            0,
+            Math.PI*2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawPlayer(player) {
+        drawPlayerCircle(player.location.x, player.location.y, player.hexColor)
+    }
+
+    function draw(gameState) {
+        clearCanvas();
+        drawPlayer(gameState.player1)
+        drawPlayer(gameState.player2)
+    }
 
     function appendLog(item) {
         var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
@@ -16,8 +45,24 @@ window.onload = function () {
             log.scrollTop = log.scrollHeight - log.clientHeight;
         }
     }
-    function setGameState(text) {
-        game.innerText = text;
+
+    function onMessage(messageJson) {
+        let message = JSON.parse(messageJson);
+        if (!message) {
+            return;
+        }
+
+        switch(message.type) {
+            case "GS":
+                requestAnimationFrame(() => draw(message.data));
+                break;
+            default:
+                break;
+        }
+    }
+
+    function setGameStatus(text) {
+        gameStatus.innerText = text;
     }
 
     document.getElementById("form").onsubmit = function () {
@@ -35,13 +80,13 @@ window.onload = function () {
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://" + document.location.host + "/ws");
         conn.onclose = function (evt) {
-            setGameState("closed");
+            setGameStatus("closed");
         };
         conn.onmessage = function (evt) {
-            setGameState(evt.data);
+            onMessage(evt.data)
         };
     } else {
-        setGameState("Not supported");
+        setGameStatus("Not supported");
     }
 };
 </script>
@@ -85,8 +130,9 @@ body {
 </head>
 <body>
 <h1>
-    <div id="game"></div>
+    <div id="gameStatus"></div>
 </h1>
+<canvas id="gameCanvas" width="480" height="320"></canvas>
 <form id="form">
     <input type="submit" value="Send" />
     <input type="text" id="msg" size="64" autofocus />

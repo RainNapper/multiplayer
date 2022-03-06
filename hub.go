@@ -5,7 +5,7 @@
 package main
 
 import (
-	"log"
+// "log"
 )
 
 // Hub maintains the set of active clients and broadcasts messages to the
@@ -47,7 +47,7 @@ func (h *Hub) run() {
 			for client := range h.clients {
 				select {
 				case client.send <- message:
-					log.Println(message)
+					// log.Println(message)
 				default:
 					close(client.send)
 					delete(h.clients, client)

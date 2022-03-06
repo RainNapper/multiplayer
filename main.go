@@ -31,6 +31,7 @@ func main() {
 	go hub.run()
 
 	gameState := newGameState(hub)
+	resetGame(gameState)
 	go gameState.run()
 
 	http.HandleFunc("/", serveHome)

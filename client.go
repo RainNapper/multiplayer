@@ -15,7 +15,7 @@ import (
 
 const (
 	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
+	writeWait = 300 * time.Second
 
 	// Time allowed to read the next pong message from the peer.
 	pongWait = 60 * time.Second
@@ -75,8 +75,52 @@ func (c *Client) readPump() {
 		if string(message) == "reset" {
 			log.Println("Resetting")
 			c.gameState.reset <- c.conn.LocalAddr().String()
+		} else if string(message) == "down" {
+			log.Println("Moving")
+			c.gameState.controls.move <- MoveCommand{
+				playerId: 1,
+				vector: Vector{
+					Dx: 0,
+					Dy: 1,
+				},
+			}
+		} else if string(message) == "up" {
+			log.Println("Moving")
+			c.gameState.controls.move <- MoveCommand{
+				playerId: 1,
+				vector: Vector{
+					Dx: 0,
+					Dy: -1,
+				},
+			}
+		} else if string(message) == "right" {
+			log.Println("Moving")
+			c.gameState.controls.move <- MoveCommand{
+				playerId: 1,
+				vector: Vector{
+					Dx: 1,
+					Dy: 0,
+				},
+			}
+		} else if string(message) == "left" {
+			log.Println("Moving")
+			c.gameState.controls.move <- MoveCommand{
+				playerId: 1,
+				vector: Vector{
+					Dx: -1,
+					Dy: 0,
+				},
+			}
+		} else if string(message) == "stop" {
+			log.Println("Moving")
+			c.gameState.controls.move <- MoveCommand{
+				playerId: 1,
+				vector: Vector{
+					Dx: 0,
+					Dy: 0,
+				},
+			}
 		}
-		c.hub.broadcast <- message
 	}
 }
 
