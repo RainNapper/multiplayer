@@ -6,6 +6,7 @@
 window.onload = function () {
     var conn;
     var msg = document.getElementById("msg");
+    var submit = document.getElementById("submit");
     var gameStatus = document.getElementById("gameStatus");
     var canvas = document.getElementById("gameCanvas");
     var ctx = canvas.getContext("2d");
@@ -18,7 +19,7 @@ window.onload = function () {
         "KeyD": false,
     }
 
-    function drawPlayerCircle(x, y, color) {
+    function drawPlayerCircle(x, y, color, name) {
         ctx.beginPath();
         ctx.arc(
             x - PLAYER_CIRCLE_RADIUS,
@@ -29,6 +30,8 @@ window.onload = function () {
         ctx.fillStyle = color;
         ctx.fill();
         ctx.closePath();
+        ctx.fillStyle = "#333333"
+        ctx.fillText(`${name[0]}`, x - PLAYER_CIRCLE_RADIUS - 3, y + 3);
     }
 
     function clearCanvas() {
@@ -36,7 +39,7 @@ window.onload = function () {
     }
 
     function drawPlayer(player) {
-        drawPlayerCircle(player.location.x, player.location.y, player.hexColor)
+        drawPlayerCircle(player.location.x, player.location.y, player.hexColor, player.name)
     }
 
     function draw(gameState) {
@@ -91,7 +94,8 @@ window.onload = function () {
                 name: msg.value
             }
         }));
-        msg.value = "";
+        msg.disabled = true
+        submit.disabled = true
         return false;
     };
 
@@ -231,7 +235,7 @@ body {
 </h1>
 <canvas id="gameCanvas" width="480" height="320"></canvas>
 <form id="form">
-    <input type="submit" value="Join" />
+    <input type="submit" id="submit" value="Join" />
     <input type="text" id="msg" size="64" autofocus />
 </form>
 </body>
