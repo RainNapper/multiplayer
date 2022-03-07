@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
+
 	// "fmt"
 	// "log"
 	"math"
@@ -16,6 +19,7 @@ type Coord struct {
 
 //
 type Player struct {
+	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	Location Coord  `json:"location"`
 	HexColor string `json:"hexColor"`
@@ -24,8 +28,8 @@ type Player struct {
 }
 
 type Vector struct {
-	Dx float64	 `json:"dx"`
-	Dy float64	 `json:"dy"`
+	Dx float64 `json:"dx"`
+	Dy float64 `json:"dy"`
 }
 
 type MoveCommand struct {
@@ -38,28 +42,27 @@ type PlayerControls struct {
 
 //
 type GameState struct {
-	player1     *Player
-	player2     *Player
+	players     map[int]*Player
 	number      int
 	hub         *Hub
 	lastResetBy string
 
-	frameTicker *time.Ticker
-	reset       chan string
-	controls    *PlayerControls
+	frameTicker   *time.Ticker
+	reset         chan string
+	controls      *PlayerControls
+	joinGame      chan *Player
+	claimPlayerID chan int
 }
 
 type ClientGameState struct {
-	Player1 *Player `json:"player1"`
-	Player2 *Player `json:"player2"`
-	Time    int     `json:"time"`
+	Players map[int]*Player `json:"players"`
+	Time    int             `json:"time"`
 }
 
 func newGameState(hub *Hub) *GameState {
 	frameTicker := time.NewTicker(33 * time.Millisecond)
 	return &GameState{
-		player1:     nil,
-		player2:     nil,
+		players:     make(map[int]*Player),
 		number:      0,
 		frameTicker: frameTicker,
 		hub:         hub,
@@ -68,31 +71,44 @@ func newGameState(hub *Hub) *GameState {
 		controls: &PlayerControls{
 			move: make(chan MoveCommand),
 		},
+		joinGame:      make(chan *Player),
+		claimPlayerID: make(chan int),
 	}
 }
 
+var HexColors = []string{
+	"#ff8888",
+	"#88ff88",
+	"#8888ff",
+	"#ffff66",
+	"#66ffff",
+	"#ff66ff",
+}
+
 func resetGame(gs *GameState) {
-	gs.player1 = &Player{
-		Name:     "player 1",
-		Location: Coord{X: 50, Y: 50},
-		HexColor: "#88DD88",
-		Vector: Vector{
-			Dx: 0,
-			Dy: 0,
-		},
-		Speed: 3,
-	}
-	gs.player2 = &Player{
-		Name:     "player 2",
-		Location: Coord{X: 300, Y: 300},
-		HexColor: "#DD8888",
-		Vector: Vector{
-			Dx: 0,
-			Dy: 0,
-		},
-		Speed: 3,
-	}
+	gs.players = make(map[int]*Player)
 	gs.number = 0
+	// gs.player1 = &Player{
+	// 	Name:     "player 1",
+	// 	Location: Coord{X: 50, Y: 50},
+	// 	HexColor: "#88DD88",
+	// 	Vector: Vector{
+	// 		Dx: 0,
+	// 		Dy: 0,
+	// 	},
+	// 	Speed: 3,
+	// }
+	// gs.player2 = &Player{
+	// 	Name:     "player 2",
+	// 	Location: Coord{X: 300, Y: 300},
+	// 	HexColor: "#DD8888",
+	// 	Vector: Vector{
+	// 		Dx: 0,
+	// 		Dy: 0,
+	// 	},
+	// 	Speed: 3,
+	// }
+	// gs.number = 0
 }
 
 func unitVector(v Vector) Vector {
@@ -106,33 +122,59 @@ func unitVector(v Vector) Vector {
 	}
 }
 
+func (gs *GameState) generatePlayerIDs() {
+	id := 0
+	for {
+		id += 1
+		gs.claimPlayerID <- id
+	}
+}
+
+func (gs *GameState) NewPlayer(name string) *Player {
+	id := <-gs.claimPlayerID
+	log.Println(fmt.Sprintf("New player: %d", id))
+	player := &Player{
+		ID:       id,
+		Name:     name,
+		Location: Coord{X: 100, Y: 100},
+		HexColor: HexColors[id%len(HexColors)],
+		Vector:   Vector{Dx: 0, Dy: 0},
+		Speed:    3,
+	}
+	gs.joinGame <- player
+	log.Println(fmt.Sprintf("Player %d joined!", id))
+	return player
+}
+
 func (gs *GameState) run() {
+	go gs.generatePlayerIDs()
 	for {
 		select {
 		case <-gs.frameTicker.C:
 			gs.number += 1
-			gs.player1.Location.X += int(gs.player1.Vector.Dx)
-			gs.player1.Location.Y += int(gs.player1.Vector.Dy)
+			for _, p := range gs.players {
+				p.Location.X += int(p.Vector.Dx)
+				p.Location.Y += int(p.Vector.Dy)
+			}
 		case resetter := <-gs.reset:
 			resetGame(gs)
 			gs.lastResetBy = resetter
 		case moveCmd := <-gs.controls.move:
-			var player *Player
-			if moveCmd.playerId == 1 {
-				player = gs.player1
-			} else {
-				player = gs.player2
+			player := gs.players[moveCmd.playerId]
+			if player == nil {
+				continue
 			}
 			unitVec := unitVector(moveCmd.vector)
 			player.Vector = Vector{
 				Dx: unitVec.Dx * float64(player.Speed),
 				Dy: unitVec.Dy * float64(player.Speed),
 			}
+		case player := <-gs.joinGame:
+			gs.players[player.ID] = player
 		}
 
 		clientState := &ClientGameState{
-			Player1: gs.player1,
-			Player2: gs.player2,
+			Players: gs.players,
 			Time:    gs.number,
 		}
 		msg := &GameMessage{

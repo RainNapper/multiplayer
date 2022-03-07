@@ -56,11 +56,6 @@ type GameMessage struct {
 	Data interface{} `json:"data"`
 }
 
-type MoveData struct {
-	dx int
-	dy int
-}
-
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -86,7 +81,7 @@ func (c *Client) readPump() {
 		messageJson := bytes.TrimSpace(bytes.Replace(messageRaw, newline, space, -1))
 		var message GameMessage
 		msgParseErr := json.Unmarshal(messageJson, &message)
-		if (msgParseErr != nil) {
+		if msgParseErr != nil {
 			log.Println(msgParseErr)
 			continue
 		}
@@ -94,16 +89,34 @@ func (c *Client) readPump() {
 		genericData := message.Data.(map[string]interface{})
 
 		if message.Type == "MV" {
-			vec := Vector {
+			vec := Vector{
 				Dx: genericData["dx"].(float64),
 				Dy: genericData["dy"].(float64),
 			}
-			c.gameState.controls.move <- MoveCommand {
-				playerId: 1,
-				vector: vec,
+			c.gameState.controls.move <- MoveCommand{
+				playerId: int(genericData["playerId"].(float64)),
+				vector:   vec,
 			}
 		} else if message.Type == "RS" {
 			c.gameState.reset <- c.conn.LocalAddr().String()
+		} else if message.Type == "JG" {
+			log.Println("[JG]")
+			name, ok := genericData["name"].(string)
+			if !ok {
+				log.Println("Missing name")
+				continue
+			}
+			player := c.gameState.NewPlayer(name)
+			msg := &GameMessage{
+				Type: "PI",
+				Data: player.ID,
+			}
+			msgJson, err := json.Marshal(msg)
+			if err != nil {
+				// error
+				continue
+			}
+			c.send <- msgJson
 		}
 	}
 }

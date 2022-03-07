@@ -9,6 +9,7 @@ window.onload = function () {
     var gameStatus = document.getElementById("gameStatus");
     var canvas = document.getElementById("gameCanvas");
     var ctx = canvas.getContext("2d");
+    var playerId = undefined;
     let PLAYER_CIRCLE_RADIUS = 10
     let keys = {
         "KeyW": false,
@@ -40,8 +41,9 @@ window.onload = function () {
 
     function draw(gameState) {
         clearCanvas();
-        drawPlayer(gameState.player1)
-        drawPlayer(gameState.player2)
+        for (const [id, p] of Object.entries(gameState.players)) {
+            drawPlayer(p)
+        }
     }
 
     function appendLog(item) {
@@ -62,6 +64,11 @@ window.onload = function () {
             case "GS":
                 requestAnimationFrame(() => draw(message.data));
                 break;
+            case "PI":
+                console.log("Player info:")
+                console.log(message.data)
+                playerId = message.data
+                break;
             default:
                 break;
         }
@@ -78,12 +85,21 @@ window.onload = function () {
         if (!msg.value) {
             return false;
         }
-        conn.send(msg.value);
+        conn.send(JSON.stringify({
+            type: "JG",
+            data: {
+                name: msg.value
+            }
+        }));
         msg.value = "";
         return false;
     };
 
     function onMoveChanged() {
+        if (playerId === undefined) {
+            return
+        }
+
         var dx = 0
         var dy = 0
         let keyW = keys["KeyW"]
@@ -117,8 +133,9 @@ window.onload = function () {
         let command = {
             type: "MV",
             data: {
+                playerId,
                 dx,
-                dy
+                dy,
             },
         };
 
@@ -214,7 +231,7 @@ body {
 </h1>
 <canvas id="gameCanvas" width="480" height="320"></canvas>
 <form id="form">
-    <input type="submit" value="Send" />
+    <input type="submit" value="Join" />
     <input type="text" id="msg" size="64" autofocus />
 </form>
 </body>
