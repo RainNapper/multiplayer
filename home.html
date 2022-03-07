@@ -10,6 +10,12 @@ window.onload = function () {
     var canvas = document.getElementById("gameCanvas");
     var ctx = canvas.getContext("2d");
     let PLAYER_CIRCLE_RADIUS = 10
+    let keys = {
+        "KeyW": false,
+        "KeyA": false,
+        "KeyS": false,
+        "KeyD": false,
+    }
 
     function drawPlayerCircle(x, y, color) {
         ctx.beginPath();
@@ -76,6 +82,80 @@ window.onload = function () {
         msg.value = "";
         return false;
     };
+
+    function onMoveChanged() {
+        var dx = 0
+        var dy = 0
+        let keyW = keys["KeyW"]
+        let keyA = keys["KeyA"]
+        let keyS = keys["KeyS"]
+        let keyD = keys["KeyD"]
+        if (keyW && keyS) {
+            if (keyW > keyS) {
+                dy = -1
+            } else {
+                dy = 1
+            }
+        } else if (keyW) {
+            dy = -1
+        } else if (keyS) {
+            dy = 1
+        }
+
+        if (keyA && keyD) {
+            if (keyA > keyD) {
+                dx = -1
+            } else {
+                dx = 1
+            }
+        } else if (keyA) {
+            dx = -1
+        } else if (keyD) {
+            dx = 1
+        }
+
+        let command = {
+            type: "MV",
+            data: {
+                dx,
+                dy
+            },
+        };
+
+        conn.send(JSON.stringify(command))
+    }
+
+    document.addEventListener('keyup', (e) => {
+        if (!conn) {
+            return
+        }
+
+        if (keys[e.code] === undefined) {
+            return
+        }
+
+        keys[e.code] = false
+
+        onMoveChanged()
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (!conn) {
+            return
+        }
+
+        if (keys[e.code] === undefined) {
+            return
+        }
+
+        if (keys[e.code] !== false) {
+            return
+        }
+
+        keys[e.code] = new Date()
+        onMoveChanged()
+    });
+
 
     if (window["WebSocket"]) {
         conn = new WebSocket("ws://" + document.location.host + "/ws");

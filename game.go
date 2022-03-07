@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	// "fmt"
-	"log"
+	// "log"
 	"math"
 	"time"
 )
@@ -24,8 +24,8 @@ type Player struct {
 }
 
 type Vector struct {
-	Dx int `json:"dx"`
-	Dy int `json:"dy"`
+	Dx float64	 `json:"dx"`
+	Dy float64	 `json:"dy"`
 }
 
 type MoveCommand struct {
@@ -55,11 +55,6 @@ type ClientGameState struct {
 	Time    int     `json:"time"`
 }
 
-type Message struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
-}
-
 func newGameState(hub *Hub) *GameState {
 	frameTicker := time.NewTicker(33 * time.Millisecond)
 	return &GameState{
@@ -85,7 +80,7 @@ func resetGame(gs *GameState) {
 			Dx: 0,
 			Dy: 0,
 		},
-		Speed: 2,
+		Speed: 3,
 	}
 	gs.player2 = &Player{
 		Name:     "player 2",
@@ -95,7 +90,7 @@ func resetGame(gs *GameState) {
 			Dx: 0,
 			Dy: 0,
 		},
-		Speed: 2,
+		Speed: 3,
 	}
 	gs.number = 0
 }
@@ -106,8 +101,8 @@ func unitVector(v Vector) Vector {
 	}
 	hypot := math.Sqrt(math.Pow(float64(v.Dx), 2) + math.Pow(float64(v.Dy), 2))
 	return Vector{
-		Dx: int(float64(v.Dx) / hypot),
-		Dy: int(float64(v.Dy) / hypot),
+		Dx: float64(v.Dx) / hypot,
+		Dy: float64(v.Dy) / hypot,
 	}
 }
 
@@ -116,20 +111,12 @@ func (gs *GameState) run() {
 		select {
 		case <-gs.frameTicker.C:
 			gs.number += 1
-			// log.Println(
-			// 	fmt.Sprintf("%d, %d (%d, %d)",
-			// 		gs.player1.Location.X,
-			// 		gs.player1.Location.Y,
-			// 		gs.player1.Vector.Dx,
-			// 		gs.player1.Vector.Dy,
-			// 	))
-			gs.player1.Location.X += gs.player1.Vector.Dx
-			gs.player1.Location.Y += gs.player1.Vector.Dy
+			gs.player1.Location.X += int(gs.player1.Vector.Dx)
+			gs.player1.Location.Y += int(gs.player1.Vector.Dy)
 		case resetter := <-gs.reset:
 			resetGame(gs)
 			gs.lastResetBy = resetter
 		case moveCmd := <-gs.controls.move:
-			log.Println(moveCmd)
 			var player *Player
 			if moveCmd.playerId == 1 {
 				player = gs.player1
@@ -138,8 +125,8 @@ func (gs *GameState) run() {
 			}
 			unitVec := unitVector(moveCmd.vector)
 			player.Vector = Vector{
-				Dx: unitVec.Dx * player.Speed,
-				Dy: unitVec.Dy * player.Speed,
+				Dx: unitVec.Dx * float64(player.Speed),
+				Dy: unitVec.Dy * float64(player.Speed),
 			}
 		}
 
@@ -148,7 +135,7 @@ func (gs *GameState) run() {
 			Player2: gs.player2,
 			Time:    gs.number,
 		}
-		msg := &Message{
+		msg := &GameMessage{
 			Type: "GS",
 			Data: clientState,
 		}

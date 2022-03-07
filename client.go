@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -50,6 +51,16 @@ type Client struct {
 	send chan []byte
 }
 
+type GameMessage struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+type MoveData struct {
+	dx int
+	dy int
+}
+
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -64,62 +75,35 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, messageRaw, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		if string(message) == "reset" {
-			log.Println("Resetting")
+
+		messageJson := bytes.TrimSpace(bytes.Replace(messageRaw, newline, space, -1))
+		var message GameMessage
+		msgParseErr := json.Unmarshal(messageJson, &message)
+		if (msgParseErr != nil) {
+			log.Println(msgParseErr)
+			continue
+		}
+
+		genericData := message.Data.(map[string]interface{})
+
+		if message.Type == "MV" {
+			vec := Vector {
+				Dx: genericData["dx"].(float64),
+				Dy: genericData["dy"].(float64),
+			}
+			c.gameState.controls.move <- MoveCommand {
+				playerId: 1,
+				vector: vec,
+			}
+		} else if message.Type == "RS" {
 			c.gameState.reset <- c.conn.LocalAddr().String()
-		} else if string(message) == "down" {
-			log.Println("Moving")
-			c.gameState.controls.move <- MoveCommand{
-				playerId: 1,
-				vector: Vector{
-					Dx: 0,
-					Dy: 1,
-				},
-			}
-		} else if string(message) == "up" {
-			log.Println("Moving")
-			c.gameState.controls.move <- MoveCommand{
-				playerId: 1,
-				vector: Vector{
-					Dx: 0,
-					Dy: -1,
-				},
-			}
-		} else if string(message) == "right" {
-			log.Println("Moving")
-			c.gameState.controls.move <- MoveCommand{
-				playerId: 1,
-				vector: Vector{
-					Dx: 1,
-					Dy: 0,
-				},
-			}
-		} else if string(message) == "left" {
-			log.Println("Moving")
-			c.gameState.controls.move <- MoveCommand{
-				playerId: 1,
-				vector: Vector{
-					Dx: -1,
-					Dy: 0,
-				},
-			}
-		} else if string(message) == "stop" {
-			log.Println("Moving")
-			c.gameState.controls.move <- MoveCommand{
-				playerId: 1,
-				vector: Vector{
-					Dx: 0,
-					Dy: 0,
-				},
-			}
 		}
 	}
 }
