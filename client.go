@@ -117,6 +117,8 @@ func (c *Client) readPump() {
 				continue
 			}
 			c.send <- msgJson
+		} else if message.Type == "PG" {
+			c.gameState.ping <- int(genericData["playerId"].(float64))
 		}
 	}
 }

@@ -19,12 +19,14 @@ type Coord struct {
 
 //
 type Player struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Location Coord  `json:"location"`
-	HexColor string `json:"hexColor"`
-	Vector   Vector `json:"-"`
-	Speed    int    `json:"-"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Location     Coord  `json:"location"`
+	HexColor     string `json:"hexColor"`
+	Vector       Vector `json:"-"`
+	Speed        int    `json:"-"`
+	LastPing     int    `json:"-"`
+	Disconnected bool   `json:"disconnected"`
 }
 
 type Vector struct {
@@ -52,6 +54,7 @@ type GameState struct {
 	controls      *PlayerControls
 	joinGame      chan *Player
 	claimPlayerID chan int
+	ping          chan int
 }
 
 type ClientGameState struct {
@@ -59,8 +62,11 @@ type ClientGameState struct {
 	Time    int             `json:"time"`
 }
 
+const MSPerFrame = 33 // 33 ms per frame is about 30fps
+const DCFrames = 150  // 150 frames is about 5 seconds
+
 func newGameState(hub *Hub) *GameState {
-	frameTicker := time.NewTicker(33 * time.Millisecond)
+	frameTicker := time.NewTicker(MSPerFrame * time.Millisecond)
 	return &GameState{
 		players:     make(map[int]*Player),
 		number:      0,
@@ -73,6 +79,7 @@ func newGameState(hub *Hub) *GameState {
 		},
 		joinGame:      make(chan *Player),
 		claimPlayerID: make(chan int),
+		ping:          make(chan int),
 	}
 }
 
@@ -134,12 +141,14 @@ func (gs *GameState) NewPlayer(name string) *Player {
 	id := <-gs.claimPlayerID
 	log.Println(fmt.Sprintf("New player: %d", id))
 	player := &Player{
-		ID:       id,
-		Name:     name,
-		Location: Coord{X: 100, Y: 100},
-		HexColor: HexColors[id%len(HexColors)],
-		Vector:   Vector{Dx: 0, Dy: 0},
-		Speed:    3,
+		ID:           id,
+		Name:         name,
+		Location:     Coord{X: 100, Y: 100},
+		HexColor:     HexColors[id%len(HexColors)],
+		Vector:       Vector{Dx: 0, Dy: 0},
+		Speed:        3,
+		LastPing:     0,
+		Disconnected: false,
 	}
 	gs.joinGame <- player
 	log.Println(fmt.Sprintf("Player %d joined!", id))
@@ -155,6 +164,10 @@ func (gs *GameState) run() {
 			for _, p := range gs.players {
 				p.Location.X += int(p.Vector.Dx)
 				p.Location.Y += int(p.Vector.Dy)
+
+				if gs.number-p.LastPing > DCFrames {
+					p.Disconnected = true
+				}
 			}
 		case resetter := <-gs.reset:
 			resetGame(gs)
@@ -171,8 +184,16 @@ func (gs *GameState) run() {
 			}
 		case player := <-gs.joinGame:
 			gs.players[player.ID] = player
+		case playerId := <-gs.ping:
+			player := gs.players[playerId]
+			if player == nil {
+				continue
+			}
+			player.LastPing = gs.number
+			if player.Disconnected {
+				player.Disconnected = false
+			}
 		}
-
 		clientState := &ClientGameState{
 			Players: gs.players,
 			Time:    gs.number,

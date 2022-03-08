@@ -39,6 +39,9 @@ window.onload = function () {
     }
 
     function drawPlayer(player) {
+        if (player.disconnected) {
+            return
+        }
         drawPlayerCircle(player.location.x, player.location.y, player.hexColor, player.name)
     }
 
@@ -186,8 +189,22 @@ window.onload = function () {
         conn.onmessage = function (evt) {
             onMessage(evt.data)
         };
+        setInterval(ping, 1000)
     } else {
         setGameStatus("Not supported");
+    }
+
+    function ping() {
+        if (!conn || status === "closed" || playerId === undefined) {
+            return
+        }
+
+        conn.send(JSON.stringify({
+            type: "PG",
+            data: {
+                playerId,
+            }
+        }))
     }
 };
 </script>
